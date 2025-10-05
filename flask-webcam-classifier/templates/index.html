@@ -48,6 +48,30 @@
             border-radius: 10px;
             max-width: 100%;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            /* visibility: hidden; */
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 10%;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+            /* background: transparent; */
+            padding: 10px;
+        }
+
+        #canvas2 {
+            position: absolute;
+            top: 0;
+            left: 10%;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+            /* background: transparent; */
+            visibility: hidden;
+            padding: 10px;
         }
 
         .controls {
@@ -141,7 +165,7 @@
             flex: 2;
             height: 30px;
             background: #e0e0e0;
-            border-radius: 15px;
+            border-radius: 10px;
             overflow: hidden;
             margin: 0 15px;
         }
@@ -184,10 +208,6 @@
         .hidden {
             display: none;
         }
-
-        canvas {
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -197,15 +217,16 @@
         <div id="status" class="status info">Click "Start Camera" to begin</div>
         
         <div class="webcam-container">
+            <canvas id="canvas2" width="640" height="480"></canvas>
+            <canvas id="canvas" width="640" height="480"></canvas>
             <video id="webcam" width="640" height="480" autoplay></video>
         </div>
         
-        <canvas id="canvas" width="640" height="480"></canvas>
         
         <div class="controls">
             <button id="startBtn">Start Camera</button>
-            <button id="stopBtn" disabled>Stop Camera</button>
-            <button id="captureBtn" disabled>Classify Image</button>
+            <!-- <button id="stopBtn" disabled>Stop Camera</button> -->
+            <!-- <button id="captureBtn" disabled>Classify Image</button> -->
         </div>
         
         <div class="results">
@@ -219,6 +240,7 @@
     <script>
         const webcam = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
+        const canvas2 = document.getElementById('canvas2');
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -241,10 +263,11 @@
                 webcam.srcObject = stream;
                 
                 startBtn.disabled = true;
-                stopBtn.disabled = false;
-                captureBtn.disabled = false;
+                // stopBtn.disabled = false;
+                // captureBtn.disabled = false;
                 
-                updateStatus('Camera is active. Capture an image to classify.', 'success');
+                continuousClassify();
+                updateStatus('Camera is active. ', 'success');
             } catch (error) {
                 updateStatus('Error accessing camera: ' + error.message, 'error');
                 console.error('Camera error:', error);
@@ -266,15 +289,17 @@
         }
 
         async function captureAndClassify() {
-            // Draw the current webcam frame to canvas
+            // Draw current webcam frame to canvas for conversion
             ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
-            
+
             // Convert canvas to base64 image
             const imageData = canvas.toDataURL('image/jpeg');
-            
+
+            // Clear canvas immediately after conversion
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
             updateStatus('Classifying image...', 'info');
-            captureBtn.disabled = true;
-            
+
             try {
                 const response = await fetch('/classify', {
                     method: 'POST',
@@ -283,11 +308,12 @@
                     },
                     body: JSON.stringify({ image: imageData })
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (result.success) {
                     displayPredictions(result.predictions);
+                    drawBoundingBoxes(result.boxes);
                     updateStatus('Classification complete!', 'success');
                 } else {
                     updateStatus('Error: ' + result.error, 'error');
@@ -295,20 +321,18 @@
             } catch (error) {
                 updateStatus('Error classifying image: ' + error.message, 'error');
                 console.error('Classification error:', error);
-            } finally {
-                captureBtn.disabled = false;
             }
         }
 
         function displayPredictions(predictions) {
             predictionsDiv.innerHTML = '';
-            
+
             predictions.forEach(pred => {
-                const percentage = (pred.confidence * 100).toFixed(1);
-                
+                const percentage = (Math.min(pred.confidence * 100, 100)).toFixed(1);
+
                 const predDiv = document.createElement('div');
                 predDiv.className = 'prediction';
-                
+
                 predDiv.innerHTML = `
                     <div class="prediction-label">${pred.label}</div>
                     <div class="prediction-bar">
@@ -317,8 +341,51 @@
                         </div>
                     </div>
                 `;
-                
+
                 predictionsDiv.appendChild(predDiv);
+            });
+        }
+
+        function drawBoundingBoxes(boxes) {
+            // Define colors for each class
+            const classColors = {
+                'E-waste': '#00CED1',
+                'Metal-waste': '#808080',
+                'bottles': '#00CED1',
+                'cardboard': '#8B4513',
+                'cups': '#FF6347',
+                'organic-waste': '#8FBC8F',
+                'other-trash': '#000000',
+                'paper': '#F5F5DC',
+                'plastic-waste': '#FF6347',
+                'trash': '#000000',
+                'trashbin': '#654321'
+            };
+
+            boxes.forEach(box => {
+                let { x1, y1, x2, y2, confidence, class: className, fine_class } = box;
+
+                // Set box color based on class
+                const color = classColors[className] || '#FF0000';
+
+                // Draw bounding box
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                y1 += 25;
+
+                // Draw label background
+                const label = `${className} (${(confidence * 100).toFixed(1)}%)`;
+                ctx.font = '16px Arial';
+                const textWidth = ctx.measureText(label).width;
+                const textHeight = 20;
+
+                ctx.fillStyle = color;
+                ctx.fillRect(x1, y1 - textHeight - 5, textWidth + 10, textHeight + 5);
+
+                // Draw label text
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(label, x1 + 5, y1 - 5);
             });
         }
 
@@ -330,9 +397,9 @@
 
         // Event listeners
         startBtn.addEventListener('click', startCamera);
-        stopBtn.addEventListener('click', stopCamera);
+        // stopBtn.addEventListener('click', stopCamera);
         //captureBtn.addEventListener('click', captureAndClassify);
-        captureBtn.addEventListener('click', continuousClassify);
+        //captureBtn.addEventListener('click', continuousClassify);
 
         // Clean up on page unload
         window.addEventListener('beforeunload', stopCamera);

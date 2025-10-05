@@ -1,0 +1,1 @@
+= cv2.resize(frame,(resW,resH))

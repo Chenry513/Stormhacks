@@ -4,64 +4,23 @@ import cv2
 import base64
 from io import BytesIO
 from PIL import Image
-# import torch
-import onnxruntime as ort
-import numpy as np
+from ultralytics import YOLO
+import json
 
 app = Flask(__name__)
 
-# Load ONNX model
-onnx_session = ort.InferenceSession('ecoar.onnx')
+# Load YOLO model
+model = YOLO('my_model.pt')
 
-# Get input and output names
-input_name = onnx_session.get_inputs()[0].name
-output_name = onnx_session.get_outputs()[0].name
-
-# Get input shape
-input_shape = onnx_session.get_inputs()[0].shape
-
-def softmax(vector):
-    """
-    Computes the softmax of a given vector.
-
-    Args:
-        vector (numpy.ndarray or list): The input vector.
-
-    Returns:
-        numpy.ndarray: The softmax output, which is a probability distribution.
-    """
-    # Convert input to a NumPy array if it's a list
-    vector = np.array(vector)
-
-    # Subtract the maximum value for numerical stability to prevent overflow
-    # when calculating exponentials of large numbers.
-    stable_vector = vector - np.max(vector)
-
-    # Calculate the exponential of each element
-    e_x = np.exp(stable_vector)
-
-    # Divide by the sum of exponentials to normalize into a probability distribution
-    return e_x / np.sum(e_x)
-
-# Load labels
+# Load coarse labels (what we want to return)
 with open('labels.txt', 'r') as f:
-    labels = [line.strip() for line in f.readlines()]
+    coarse_labels = [line.strip() for line in f.readlines()]
 
-def preprocess_image(image, target_size=(224, 224)):
-    """Preprocess image for ONNX model"""
-    # Resize image
-    image = image.resize(target_size)
-    # Convert to array and normalize
-    img_array = np.array(image, dtype=np.float32)
-    # Normalize to [0, 1]
-    img_array = img_array / 255.0
-    # Add batch dimension
-    img_array = np.expand_dims(img_array, axis=0)
-    # ONNX models typically expect NCHW format (batch, channels, height, width)
-    # Transpose from NHWC to NCHW
-    img_array = np.transpose(img_array, (0, 3, 1, 2))
+# Load fine-to-coarse mapping
+# with open('fine_to_coarse.json', 'r') as f:
+#     fine_to_coarse = json.load(f)
 
-    return img_array
+
 
 @app.route('/')
 def index():
@@ -82,43 +41,103 @@ def classify():
         # Decode base64 image
         image_bytes = base64.b64decode(image_data)
         image = Image.open(BytesIO(image_bytes)).convert('RGB')
-        
-        print(image)
-        # Preprocess image
-        input_data = preprocess_image(image)
-        
-        # Run inference with ONNX Runtime
-        outputs = onnx_session.run([output_name], {input_name: input_data})
-        
-        
-        print(outputs)
-        # Get predictions
-        predictions = softmax(outputs[0][0])
-                
-        # probs = torch.softmax(predictions, dim=1)[0]
-        # pred_idx = torch.argmax(probs).item()
 
-        # print("Prediction:", labels[pred_idx])
-        # print("Probabilities:", {labels[i]: float(p) for i,p in enumerate(probs)})
-    
-        # print(softmax(predictions))
-        
+        # Convert to numpy array in BGR format (H, W, C) like OpenCV
+        image_rgb = np.array(image)  # PIL gives us RGB
+        image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)  # Convert to BGR
+        image_bgr = cv2.resize(image_rgb,(640,480))
+        print(f"Image shape: {image_bgr.shape}, dtype: {image_bgr.dtype}, range: [{image_bgr.min()}, {image_bgr.max()}]")
+
+        # Run inference with YOLO model (same as yolo_detect.py)
+        results = model(image_bgr, verbose=False)
+
+        print(results)
+        # Get predictions from YOLO results
+        # YOLO returns a list of results, we take the first one
+        result = results[0]
+
+        # Get the class names from the model
+        class_names = model.names
+
+        # Initialize coarse category predictions
+        coarse_predictions = np.zeros(len(coarse_labels))
+
+        # For YOLO detection models, we use bounding boxes and their confidence scores
+        print(f"Number of boxes detected: {len(result.boxes)}")
+
+        # Extract results the same way as yolo_detect.py
+        detections = result.boxes
+        print(f"Detections type: {type(detections)}")
+
+        if len(detections) > 0:
+            print("Processing detections using yolo_detect.py method")
+            # Process all detected boxes using the same method as yolo_detect.py
+            for i in range(len(detections)):
+                # Get bounding box coordinates (same as yolo_detect.py)
+                xyxy_tensor = detections[i].xyxy.cpu()
+                xyxy = xyxy_tensor.numpy().squeeze()
+                xmin, ymin, xmax, ymax = xyxy.astype(int)
+
+                # Get bounding box class ID and name (same as yolo_detect.py)
+                class_idx = int(detections[i].cls.item())
+                fine_class_name = class_names[class_idx]
+
+                # Get bounding box confidence (same as yolo_detect.py)
+                confidence = detections[i].conf.item()
+
+                print(f"Box {i}: {fine_class_name} at ({xmin},{ymin},{xmax},{ymax}) - confidence: {confidence:.3f}")
+                coarse_category = fine_class_name
+                coarse_idx = coarse_labels.index(coarse_category)
+                # Add confidence (can be multiple detections of same category)
+                coarse_predictions[coarse_idx] += confidence
+        else:
+            print("No boxes detected - this might indicate an issue with the model or image")
+
+        #print(coarse_labels)
         # Create results dictionary
         results = []
-        for i, label in enumerate(labels):
+        for i, label in enumerate(coarse_labels):
             results.append({
                 'label': label,
-                'confidence': float(predictions[i])
+                'confidence': float(coarse_predictions[i])
             })
-        
+
         # Sort by confidence
         results = sorted(results, key=lambda x: x['confidence'], reverse=True)
-        
+
+        # Get bounding boxes for overlay
+        boxes = []
+        if len(result.boxes) > 0:
+            for box in result.boxes:
+                class_idx = int(box.cls.cpu().numpy())
+                confidence = float(box.conf.cpu().numpy())
+                fine_class_name = class_names[class_idx]
+
+                # Map to coarse category
+                coarse_category = fine_class_name
+                if coarse_category in coarse_labels:
+                    coarse_idx = coarse_labels.index(coarse_category)
+
+                    # Get box coordinates (x1, y1, x2, y2)
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+
+                    boxes.append({
+                        'x1': float(x1),
+                        'y1': float(y1),
+                        'x2': float(x2),
+                        'y2': float(y2),
+                        'confidence': confidence,
+                        'class': coarse_category,
+                        'fine_class': fine_class_name
+                    })
+
+        print(results)
+
         return jsonify({
             'success': True,
-            'predictions': results
+            'predictions': results,
+            'boxes': boxes
         })
-        sleep(1)
     
     except Exception as e:
         return jsonify({
