@@ -64,7 +64,6 @@ http://localhost:5000
 
 4. Point your camera at a garbage item
 
-5. Click "Classify Image" to get predictions
 
 ## Usage Tips
 
@@ -77,13 +76,17 @@ http://localhost:5000
 
 ```
 flask-webcam-classifier/
-├── app.py                 # Flask backend application
-├── model.tflite          # TensorFlow Lite model
-├── labels.txt            # Classification labels
-├── requirements.txt      # Python dependencies
-├── templates/
-│   └── index.html       # Frontend HTML/CSS/JavaScript
-└── README.md            # This file
+├── templates/                 # HTML templates for the Flask web app
+├── README.md                  # Project documentation
+├── app.py                      # Main Flask application file (runs the web server)
+├── fine_to_coarse.json         # JSON file mapping fine-grained classes to broader categories
+├── labels.txt                  # List of class labels used by the classifier
+├── model.ipynb                 # Jupyter notebook for model training and experimentation
+├── my_model.pt                 # Saved PyTorch model weights for inference
+├── requirements.txt            # Python dependencies required to run the project
+├── tempCodeRunnerFile.py       # Temporary file used during development/debugging
+├── yolo_detect.py              # YOLO-based object detection script (for bounding boxes)
+└── ...                          # Additional files as needed
 ```
 
 ## Technologies Used
