@@ -5,7 +5,7 @@ EcoSortAR tackles the issue of recycling contamination, a major problem in North
 ## Features
 
 - Real-time webcam capture
-- TensorFlow Lite model inference
+- Yolov8 model inference
 - Classification of 6 types of waste:
   - Cardboard
   - Glass
@@ -73,23 +73,10 @@ http://localhost:5000
 - Try to avoid cluttered backgrounds
 - The model works best when the object takes up a significant portion of the frame
 
-## Project Structure
-
-```
-flask-webcam-classifier/
-├── app.py                 # Flask backend application
-├── model.tflite          # TensorFlow Lite model
-├── labels.txt            # Classification labels
-├── requirements.txt      # Python dependencies
-├── templates/
-│   └── index.html       # Frontend HTML/CSS/JavaScript
-└── README.md            # This file
-```
-
 ## Technologies Used
 
 - **Backend**: Flask (Python web framework)
-- **ML Framework**: TensorFlow Lite
+- **ML Framework**: Yolov8
 - **Image Processing**: OpenCV, Pillow, NumPy
 - **Frontend**: HTML5, CSS3, JavaScript
 - **Webcam API**: MediaDevices Web API
