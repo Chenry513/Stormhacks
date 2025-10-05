@@ -4,8 +4,9 @@ import cv2
 import base64
 from io import BytesIO
 from PIL import Image
-import torch
+# import torch
 import onnxruntime as ort
+import numpy as np
 
 app = Flask(__name__)
 
@@ -18,6 +19,29 @@ output_name = onnx_session.get_outputs()[0].name
 
 # Get input shape
 input_shape = onnx_session.get_inputs()[0].shape
+
+def softmax(vector):
+    """
+    Computes the softmax of a given vector.
+
+    Args:
+        vector (numpy.ndarray or list): The input vector.
+
+    Returns:
+        numpy.ndarray: The softmax output, which is a probability distribution.
+    """
+    # Convert input to a NumPy array if it's a list
+    vector = np.array(vector)
+
+    # Subtract the maximum value for numerical stability to prevent overflow
+    # when calculating exponentials of large numbers.
+    stable_vector = vector - np.max(vector)
+
+    # Calculate the exponential of each element
+    e_x = np.exp(stable_vector)
+
+    # Divide by the sum of exponentials to normalize into a probability distribution
+    return e_x / np.sum(e_x)
 
 # Load labels
 with open('labels.txt', 'r') as f:
@@ -66,8 +90,10 @@ def classify():
         # Run inference with ONNX Runtime
         outputs = onnx_session.run([output_name], {input_name: input_data})
         
+        
+        print(outputs)
         # Get predictions
-        predictions = outputs[0][0]
+        predictions = softmax(outputs[0][0])
                 
         # probs = torch.softmax(predictions, dim=1)[0]
         # pred_idx = torch.argmax(probs).item()
@@ -75,7 +101,7 @@ def classify():
         # print("Prediction:", labels[pred_idx])
         # print("Probabilities:", {labels[i]: float(p) for i,p in enumerate(probs)})
     
-        print(predictions)
+        # print(softmax(predictions))
         
         # Create results dictionary
         results = []
@@ -92,6 +118,7 @@ def classify():
             'success': True,
             'predictions': results
         })
+        sleep(1)
     
     except Exception as e:
         return jsonify({

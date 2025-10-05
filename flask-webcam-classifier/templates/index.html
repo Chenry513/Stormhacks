@@ -197,10 +197,10 @@
         <div id="status" class="status info">Click "Start Camera" to begin</div>
         
         <div class="webcam-container">
-            <video id="webcam" width="224" height="224" autoplay></video>
+            <video id="webcam" width="640" height="480" autoplay></video>
         </div>
         
-        <canvas id="canvas" width="224" height="224"></canvas>
+        <canvas id="canvas" width="640" height="480"></canvas>
         
         <div class="controls">
             <button id="startBtn">Start Camera</button>
@@ -322,10 +322,17 @@
             });
         }
 
+        const continuousClassify = () => {
+            captureAndClassify().then(() => {
+                setTimeout(continuousClassify, 1000); // Classify every 5 seconds
+            });
+        }
+
         // Event listeners
         startBtn.addEventListener('click', startCamera);
         stopBtn.addEventListener('click', stopCamera);
-        captureBtn.addEventListener('click', captureAndClassify);
+        //captureBtn.addEventListener('click', captureAndClassify);
+        captureBtn.addEventListener('click', continuousClassify);
 
         // Clean up on page unload
         window.addEventListener('beforeunload', stopCamera);
