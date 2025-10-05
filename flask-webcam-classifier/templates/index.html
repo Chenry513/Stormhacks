@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Garbage Classifier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .webcam-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #webcam {
+            border-radius: 10px;
+            max-width: 100%;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        #startBtn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        #startBtn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #stopBtn {
+            background: #f44336;
+            color: white;
+        }
+
+        #stopBtn:hover {
+            background: #da190b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #captureBtn {
+            background: #2196F3;
+            color: white;
+        }
+
+        #captureBtn:hover {
+            background: #0b7dda;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 200px;
+        }
+
+        .results h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .prediction {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .prediction-label {
+            flex: 1;
+            font-weight: bold;
+            color: #333;
+            text-transform: capitalize;
+        }
+
+        .prediction-bar {
+            flex: 2;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 0 15px;
+        }
+
+        .prediction-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Webcam Garbage Classifier</h1>
+        
+        <div id="status" class="status info">Click "Start Camera" to begin</div>
+        
+        <div class="webcam-container">
+            <video id="webcam" width="640" height="480" autoplay></video>
+        </div>
+        
+        <canvas id="canvas" width="640" height="480"></canvas>
+        
+        <div class="controls">
+            <button id="startBtn">Start Camera</button>
+            <button id="stopBtn" disabled>Stop Camera</button>
+            <button id="captureBtn" disabled>Classify Image</button>
+        </div>
+        
+        <div class="results">
+            <h2>Classification Results</h2>
+            <div id="predictions">
+                <p style="text-align: center; color: #999;">No predictions yet. Capture an image to classify.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const webcam = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const status = document.getElementById('status');
+        const predictionsDiv = document.getElementById('predictions');
+        
+        let stream = null;
+
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                webcam.srcObject = stream;
+                
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                captureBtn.disabled = false;
+                
+                updateStatus('Camera is active. Capture an image to classify.', 'success');
+            } catch (error) {
+                updateStatus('Error accessing camera: ' + error.message, 'error');
+                console.error('Camera error:', error);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                webcam.srcObject = null;
+                stream = null;
+                
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                captureBtn.disabled = true;
+                
+                updateStatus('Camera stopped.', 'info');
+            }
+        }
+
+        async function captureAndClassify() {
+            // Draw the current webcam frame to canvas
+            ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+            
+            // Convert canvas to base64 image
+            const imageData = canvas.toDataURL('image/jpeg');
+            
+            updateStatus('Classifying image...', 'info');
+            captureBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/classify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayPredictions(result.predictions);
+                    updateStatus('Classification complete!', 'success');
+                } else {
+                    updateStatus('Error: ' + result.error, 'error');
+                }
+            } catch (error) {
+                updateStatus('Error classifying image: ' + error.message, 'error');
+                console.error('Classification error:', error);
+            } finally {
+                captureBtn.disabled = false;
+            }
+        }
+
+        function displayPredictions(predictions) {
+            predictionsDiv.innerHTML = '';
+            
+            predictions.forEach(pred => {
+                const percentage = (pred.confidence * 100).toFixed(1);
+                
+                const predDiv = document.createElement('div');
+                predDiv.className = 'prediction';
+                
+                predDiv.innerHTML = `
+                    <div class="prediction-label">${pred.label}</div>
+                    <div class="prediction-bar">
+                        <div class="prediction-fill" style="width: ${percentage}%">
+                            ${percentage}%
+                        </div>
+                    </div>
+                `;
+                
+                predictionsDiv.appendChild(predDiv);
+            });
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        captureBtn.addEventListener('click', captureAndClassify);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', stopCamera);
+    </script>
+</body>
+</html>
