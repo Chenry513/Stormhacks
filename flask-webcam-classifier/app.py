@@ -4,32 +4,39 @@ import cv2
 import base64
 from io import BytesIO
 from PIL import Image
-import tensorflow as tf
+import torch
+import onnxruntime as ort
 
 app = Flask(__name__)
 
-# Load TensorFlow Lite model
-interpreter = tf.lite.Interpreter(model_path='model.tflite')
-interpreter.allocate_tensors()
+# Load ONNX model
+onnx_session = ort.InferenceSession('ecoar.onnx')
 
-# Get input and output details
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+# Get input and output names
+input_name = onnx_session.get_inputs()[0].name
+output_name = onnx_session.get_outputs()[0].name
+
+# Get input shape
+input_shape = onnx_session.get_inputs()[0].shape
 
 # Load labels
 with open('labels.txt', 'r') as f:
     labels = [line.strip() for line in f.readlines()]
 
 def preprocess_image(image, target_size=(224, 224)):
-    """Preprocess image for TensorFlow Lite model"""
+    """Preprocess image for ONNX model"""
     # Resize image
     image = image.resize(target_size)
     # Convert to array and normalize
     img_array = np.array(image, dtype=np.float32)
-    # Normalize to [0, 1] or [-1, 1] depending on model requirements
+    # Normalize to [0, 1]
     img_array = img_array / 255.0
     # Add batch dimension
     img_array = np.expand_dims(img_array, axis=0)
+    # ONNX models typically expect NCHW format (batch, channels, height, width)
+    # Transpose from NHWC to NCHW
+    img_array = np.transpose(img_array, (0, 3, 1, 2))
+
     return img_array
 
 @app.route('/')
@@ -52,20 +59,23 @@ def classify():
         image_bytes = base64.b64decode(image_data)
         image = Image.open(BytesIO(image_bytes)).convert('RGB')
         
+        print(image)
         # Preprocess image
         input_data = preprocess_image(image)
         
-        # Set input tensor
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        
-        # Run inference
-        interpreter.invoke()
-        
-        # Get output tensor
-        output_data = interpreter.get_tensor(output_details[0]['index'])
+        # Run inference with ONNX Runtime
+        outputs = onnx_session.run([output_name], {input_name: input_data})
         
         # Get predictions
-        predictions = output_data[0]
+        predictions = outputs[0][0]
+                
+        # probs = torch.softmax(predictions, dim=1)[0]
+        # pred_idx = torch.argmax(probs).item()
+
+        # print("Prediction:", labels[pred_idx])
+        # print("Probabilities:", {labels[i]: float(p) for i,p in enumerate(probs)})
+    
+        print(predictions)
         
         # Create results dictionary
         results = []
