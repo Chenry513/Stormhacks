@@ -238,6 +238,21 @@
     </div>
 
     <script>
+        const fineToCoarseMap = 
+        {
+            "E-waste": "Metal",
+            "Metal-waste": "Metal",
+            "bottles": "plastic",
+            "cardboard": "cardboard",
+            "cups": "plastic",
+            "organic-waste": "trash",
+            "other-trash": "trash",
+            "paper": "paper",
+            "plastic-waste": "plastic",
+            "trash": "trash",
+            "trashbin": "trash"
+        }
+
         const webcam = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
         const canvas2 = document.getElementById('canvas2');
@@ -327,14 +342,18 @@
         function displayPredictions(predictions) {
             predictionsDiv.innerHTML = '';
 
+            console.log(predictions);
+            alreadyDisplayed = {};
             predictions.forEach(pred => {
+                if(alreadyDisplayed[fineToCoarseMap[pred.label]]) return;
+                alreadyDisplayed[fineToCoarseMap[pred.label]] = true;
                 const percentage = (Math.min(pred.confidence * 100, 100)).toFixed(1);
 
                 const predDiv = document.createElement('div');
                 predDiv.className = 'prediction';
 
                 predDiv.innerHTML = `
-                    <div class="prediction-label">${pred.label}</div>
+                    <div class="prediction-label">${fineToCoarseMap[pred.label]}</div>
                     <div class="prediction-bar">
                         <div class="prediction-fill" style="width: ${percentage}%">
                             ${percentage}%

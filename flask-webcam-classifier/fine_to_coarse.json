@@ -1,0 +1,13 @@
+{
+    "E-waste": "Metal",
+    "Metal-waste": "Metal",
+    "bottles": "Plastic",
+    "cardboard": "cardboard",
+    "cups": "plastic",
+    "organic-waste": "trash",
+    "other-trash": "trash",
+    "paper": "paper",
+    "plastic-waste": "plastic",
+    "trash": "trash",
+    "trashbin": "trash"
+}
