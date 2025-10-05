@@ -1,6 +1,6 @@
 # Webcam Garbage Classifier
 
-A Flask web application that uses your webcam and a TensorFlow Lite model to classify garbage items in real-time.
+EcoSortAR tackles the issue of recycling contamination, a major problem in North America where only about 25–27% of recyclable waste is properly diverted, resulting in billions of dollars in unnecessary costs—over $20 million in extra expenses for Toronto alone and more than $3.5 billion across the U.S. due to manual sorting, lost material value, and landfilling rejected loads. Our app uses machine learning to identify waste items in real time and leverages augmented reality to show users what type of material they’re disposing of, helping them learn proper sorting habits over time. Powered by a YOLO deep learning model trained on 1,000 images categorized into e-waste, organics, plastic, cardboard, and paper, EcoSortAR analyzes the camera feed to instantly classify waste and provide sorting guidance. Looking ahead, we aim to reduce sorting errors by 10–20%, customize sorting rules to each user’s city, introduce gamified rewards for consistent accuracy, and eventually add an AR feature that overlays step-by-step disposal guidance directly on the detected item in the camera view.
 
 ## Features
 
